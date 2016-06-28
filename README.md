@@ -6,3 +6,10 @@ need to look at the entire file every single time.
 
 These modules read the file in a stream from the FTP server, and extract out the UniProt identifiers that match
 with a reference proteome for a given Taxonomy ID.
+
+You supply the Taxonomy identifiers that you wish to extract the InterPro entries for, and the files are
+extracted into .tsv files for each Taxonomy ID.
+
+```
+docker run -v $PWD/output:/output --rm -it hirenj/parse_interpro --taxid 9606,10116,559292 --output /output
+```

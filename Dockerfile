@@ -5,4 +5,5 @@ ADD package.json package.json
 RUN npm install
 
 ADD . .
-CMD ["npm", "start"]
+ENTRYPOINT ["npm", "start", "--"]
+CMD ["--taxid","9606,10090"]

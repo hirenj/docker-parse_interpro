@@ -5,7 +5,10 @@ const fs = require('fs');
 const zlib = require('zlib');
 const uniprot = require('./uniprot');
 const WriteTaxid = require('./writer');
+const nconf = require('nconf');
+const path = require('path');
 
+nconf.env().argv();
 
 const LATEST_INTERPRO = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/protein2ipr.dat.gz';
 
@@ -44,7 +47,17 @@ const read_test_file = function() {
   });
 }
 
-let tax_ids = ['9606','559292','10090'];
+let tax_ids = (nconf.get('taxid') || '').split(',');
+let output_path = nconf.get('output') || '';
+
+console.log("Getting InterPro entries for "+nconf.get('taxid'));
+
+if (tax_ids.length < 1) {
+  process.exit(1);
+}
+
+// TODO: Extract the InterPro release and attach this metadata to the
+// output TSV files (maybe in a comment at the top?)
 
 let interpro_url = LATEST_INTERPRO;
 uniprot.create_filter(tax_ids).then(function(filter) {
@@ -54,7 +67,7 @@ uniprot.create_filter(tax_ids).then(function(filter) {
       output.on('end',function() {
         console.log("Done writing file");
       });
-      let out = fs.createWriteStream(''+taxid+'.tsv');
+      let out = fs.createWriteStream(path.join( output_path, ''+taxid+'.tsv'));
       stream.pipe(output).pipe(out);
     });
     stream.on('end',function() {
