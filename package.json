@@ -1,0 +1,16 @@
+{
+  "name": "parse_interpro",
+  "version": "1.0.0",
+  "description": "Extract InterPro ids from InterPro data files for specific Taxonomy IDs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "author": "interpro@glycocode.com",
+  "license": "ISC",
+  "dependencies": {
+    "ftp": "^0.3.10",
+    "request": "^2.72.0"
+  }
+}
