@@ -10,7 +10,7 @@ const path = require('path');
 
 nconf.env().argv();
 
-const LATEST_INTERPRO = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/protein2ipr.dat.gz';
+const LATEST_INTERPRO = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/protein2ipr.dat.gz';
 
 const decompress = function(stream) {
   var gunzip = zlib.createGunzip();
@@ -70,10 +70,15 @@ uniprot.create_filter(tax_ids).then(function(filter) {
       let out = fs.createWriteStream(path.join( output_path, ''+taxid+'.tsv'));
       stream.pipe(output).pipe(out);
     });
+    stream.on('error',function(err) {
+      console.log(err,err.stack);
+      process.exit(1);
+    });
     stream.on('end',function() {
       console.log("Done filtering InterPro");
     });
   });
 }).catch(function(err) {
   console.log(err,err.stack);
+  process.exit(1);
 });
