@@ -13,3 +13,12 @@ extracted into .tsv files for each Taxonomy ID.
 ```
 docker run -v $PWD/output:/output --rm -it hirenj/parse_interpro --taxid 9606,10116,559292 --output /output
 ```
+
+OR
+
+```
+docker run --rm -it -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY hirenj/parse_interpro --taxid 9606,10116,559292 --output s3:::somebucket/folder
+```
+
+Files are uploaded to S3 with the filenames InterPro-taxid.tsv, and have an x-amz-meta-interpro header that contains the release for the
+file. The rationale behind this is that we only publish the latest InterPro data on S3.
