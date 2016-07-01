@@ -43,6 +43,7 @@ nconf.env().argv();
 
 const LATEST_INTERPRO = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/protein2ipr.dat.gz';
 const LATEST_RELEASE  = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/release_notes.txt';
+const LATEST_INTERPRO_NAMES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/short_names.dat';
 
 
 const decompress = function(stream) {
@@ -138,9 +139,13 @@ const check_exists_s3 = function(release,taxid) {
 };
 
 const get_writestream_s3 = function(params,release,taxid) {
+  let filename = 'InterPro-'+taxid+'.tsv';
+  if ( taxid === 'meta' ) {
+    filename = 'meta-InterPro.tsv';
+  }
   const s3 = new AWS.S3({region:params.Region});
   delete params.Region;
-  params.Key = (params.Key.length > 0 ? params.Key.replace(/\/$/,'') + '/' : '') + 'InterPro-'+taxid+'.tsv';
+  params.Key = (params.Key.length > 0 ? params.Key.replace(/\/$/,'') + '/' : '') + filename;
   var stream = new require('stream').PassThrough();
   params.Body = stream;
   params.Metadata = { 'interpro' : release };
@@ -169,6 +174,15 @@ const get_writestream = function(release,taxid) {
   return fs.createWriteStream(path.join( output_path, 'InterPro-'+release+'-'+taxid+'.tsv' ));
 };
 
+const get_writestream_names = function(release) {
+  if (output_path.match(/^s3:/)) {
+    console.log("Uploading name metadata to ",output_path);
+    return get_writestream_s3(parse_path_s3(output_path),release,'meta');
+  }
+  console.log("Writing name metadata to ",output_path);
+  return fs.createWriteStream(path.join( output_path, 'meta-InterPro-'+release+'.tsv' ));
+};
+
 const check_release = function(taxids) {
   return get_release().then(function(release) {
     return Promise.all( taxids.map(check_exists.bind(null,release)) ).then(function(exists) {
@@ -180,14 +194,42 @@ const check_release = function(taxids) {
   });
 };
 
+const write_taxonomy_files = function(release,tax_ids,stream) {
+  tax_ids.forEach(function(taxid) {
+    let output = new WriteTaxid(taxid);
+    output.on('end',function() {
+      console.log("Done writing TSV for ",taxid);
+    });
+    let out = get_writestream(release,taxid);
+    stream.pipe(output).pipe(out);
+  });
+  return new Promise(function(resolve,reject) {
+    stream.on('error',function(err) {
+      reject(err);
+    });
+    stream.on('end',function() {
+      resolve();
+    });
+  });
+};
+
+const write_meta_files = function(release,stream) {
+  stream.pipe(get_writestream_names(release));
+  return new Promise(function(resolve,reject) {
+    stream.on('error',function(err) {
+      reject(err);
+    });
+    stream.on('end',function() {
+      resolve();
+    });
+  });
+};
+
 console.log("Getting InterPro entries for taxonomies",nconf.get('taxid'));
 
 if (tax_ids.length < 1) {
   process.exit(1);
 }
-
-// TODO: Extract the InterPro release and attach this metadata to the
-// output TSV files (maybe in a comment at the top?)
 
 let interpro_url = LATEST_INTERPRO;
 Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(function(meta) {
@@ -197,24 +239,17 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
     process.exit(0);
   }
   let filter = meta[1];
-  ftp.get_stream(interpro_url).then(decompress).then(line_filter.bind(null,filter)).then(function(stream) {
-    tax_ids.forEach(function(taxid) {
-      let output = new WriteTaxid(taxid);
-      output.on('end',function() {
-        console.log("Done writing TSV for ",taxid);
-      });
-      let out = get_writestream(release,taxid);
-      stream.pipe(output).pipe(out);
-    });
-    stream.on('error',function(err) {
-      console.log(err,err.stack);
-      process.exit(1);
-    });
-    stream.on('end',function() {
-      console.log("Done filtering InterPro");
-    });
-  });
-}).catch(function(err) {
+  return ftp.get_stream(interpro_url)
+  .then(decompress)
+  .then(line_filter.bind(null,filter))
+  .then(write_taxonomy_files.bind(null,release,tax_ids))
+  .then(() => console.log("Done writing InterPro files"))
+  .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
+  .then(write_meta_files.bind(null,release))
+  .then(() => console.log("Done writing InterPro metadata files"));
+})
+.then(() => console.log("Finished executing"))
+.catch(function(err) {
   console.log(err,err.stack);
   process.exit(1);
 });
