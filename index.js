@@ -44,6 +44,7 @@ nconf.env().argv();
 const LATEST_INTERPRO = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/protein2ipr.dat.gz';
 const LATEST_RELEASE  = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/release_notes.txt';
 const LATEST_INTERPRO_NAMES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/short_names.dat';
+const LATEST_INTERPRO_CLASSES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/entry.list';
 
 
 const decompress = function(stream) {
@@ -143,6 +144,9 @@ const get_writestream_s3 = function(params,release,taxid) {
   if ( taxid === 'meta' ) {
     filename = 'meta-InterPro.tsv';
   }
+  if (taxid == 'class') {
+    filename = 'class-InterPro.tsv';
+  }
   const s3 = new AWS.S3({region:params.Region});
   delete params.Region;
   params.Key = (params.Key.length > 0 ? params.Key.replace(/\/$/,'') + '/' : '') + filename;
@@ -181,6 +185,15 @@ const get_writestream_names = function(release) {
   }
   console.log("Writing name metadata to ",output_path);
   return fs.createWriteStream(path.join( output_path, 'meta-InterPro-'+release+'.tsv' ));
+};
+
+const get_writestream_classes = function(release) {
+  if (output_path.match(/^s3:/)) {
+    console.log("Uploading class metadata to ",output_path);
+    return get_writestream_s3(parse_path_s3(output_path),release,'class');
+  }
+  console.log("Writing class metadata to ",output_path);
+  return fs.createWriteStream(path.join( output_path, 'class-InterPro-'+release+'.tsv' ));
 };
 
 const check_release = function(taxids) {
@@ -225,6 +238,18 @@ const write_meta_files = function(release,stream) {
   });
 };
 
+const write_class_files = function(release,stream) {
+  stream.pipe(get_writestream_classes(release));
+  return new Promise(function(resolve,reject) {
+    stream.on('error',function(err) {
+      reject(err);
+    });
+    stream.on('end',function() {
+      resolve();
+    });
+  });
+};
+
 console.log("Getting InterPro entries for taxonomies",nconf.get('taxid'));
 
 if (tax_ids.length < 1) {
@@ -244,6 +269,8 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
   .then(line_filter.bind(null,filter))
   .then(write_taxonomy_files.bind(null,release,tax_ids))
   .then(() => console.log("Done writing InterPro files"))
+  .then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
+  .then(write_class_files.bind(null,release))
   .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
   .then(write_meta_files.bind(null,release))
   .then(() => console.log("Done writing InterPro metadata files"));
