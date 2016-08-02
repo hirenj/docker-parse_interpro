@@ -1,6 +1,8 @@
 const parse_url = require('url').parse;
 const ftp = require('ftp');
 
+const util = require('util');
+const Transform = require('stream').Transform;
 
 const connect_ftp = function(url) {
   var req = parse_url(url);
@@ -21,12 +23,16 @@ const connect_ftp = function(url) {
 
 const download_file = function(ftp,path) {
   return new Promise(function(resolve,reject) {
-    ftp.get(path, function(err, stream) {
-      if (err) throw err;
-      stream.once('close', function() {
-        ftp.end();
+    ftp.list(path,function(err,props) {
+      var size = props[0].size;
+      ftp.get(path, function(err, stream) {
+        if (err) throw err;
+        stream.once('close', function() {
+          ftp.end();
+        });
+        stream.size = size;
+        resolve(stream);
       });
-      resolve(stream);
     });
   });
 };

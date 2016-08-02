@@ -8,6 +8,8 @@ const WriteTaxid = require('./writer');
 const nconf = require('nconf');
 const path = require('path');
 const AWS = require('aws-sdk');
+const util = require('util');
+const Transform = require('stream').Transform;
 
 const promisify = function(aws) {
   aws.Request.prototype.promise = function() {
@@ -53,26 +55,56 @@ const decompress = function(stream) {
   return gunzip;
 };
 
+function ByteCounter(total,options) {
+
+  if (!(this instanceof ByteCounter)) {
+    return new ByteCounter(total,options);
+  }
+
+  if (!options) options = {};
+  options.objectMode = false;
+  this.bytecount = 0;
+  this.lastlevel = 0;
+  this.total = total;
+  Transform.call(this, options);
+}
+
+util.inherits(ByteCounter, Transform);
+
+ByteCounter.prototype._transform = function (obj, enc, cb) {
+  this.bytecount += obj.length;
+  if (this.bytecount > this.lastlevel) {
+    console.log("Remaining bytes ",parseInt((this.total - this.bytecount) / (1024*1024))," MB ");
+    this.lastlevel += 10*1024*1024;
+  }
+  this.push(obj);
+  cb();
+};
+
+function TabSplitter(options) {
+  if (!(this instanceof TabSplitter)) {
+    return new TabSplitter(options);
+  }
+
+  if (!options) options = {};
+  options.objectMode = true;
+  Transform.call(this, options);
+}
+
+util.inherits(TabSplitter, Transform);
+
+TabSplitter.prototype._transform = function (obj,enc,cb) {
+  let row = obj.toString().split('\t');
+  this.push({ 'acc' : row[0], 'interpro' : row[1], 'start' : parseInt(row[4]), 'end' : parseInt(row[5]) });
+  cb();
+};
+
 
 const line_filter = function(filter,stream) {
   return new Promise(function(resolve) {
-    var lineReader = require('readline').createInterface({
-      input: stream
-    });
-    lineReader.on('line',function(dat) {
-      let row = dat.toString().split('\t');
-      filter.write({ 'acc' : row[0], 'interpro' : row[1], 'start' : parseInt(row[4]), 'end' : parseInt(row[5]) });
-    });
-
-    lineReader.on('close',function() {
-      filter.end();
-    });
-
-    lineReader.on('error',function(err) {
-      reject(err);
-    });
-
-    resolve(filter);
+    let byline = require('byline');
+    let line_splitter = byline.createStream();
+    resolve(stream.pipe(line_splitter).pipe(new TabSplitter()).pipe(filter));
   });
 };
 
@@ -105,6 +137,11 @@ const get_release = function() {
 let tax_ids = ((nconf.get('taxid') || '')+'').split(',');
 let output_path = nconf.get('output') || '';
 
+if ( output_path.indexOf('s3') == 0 && ! output_path.match(/s3:.*:.*:[^\/].*/)) {
+  throw new Error("Invalid output path do you mean s3:::bucket/path ?");
+}
+
+
 const check_exists_local = function(release,taxid) {
   try {
     fs.accessSync(path.join( output_path, 'InterPro-'+release+'-'+taxid+'.tsv'),fs.F_OK);
@@ -117,6 +154,9 @@ const check_exists_local = function(release,taxid) {
 const parse_path_s3 = function(path) {
   let result = {};
   let bits = path.split(':');
+  if (! path.match(/s3:.*:.*:[^\/].*/)) {
+    throw new Error("Invalid output path do you mean s3:::bucket/path ?");
+  }
   result.Bucket = bits[3].split('/')[0];
   result.Region = bits[1] || 'us-east-1';
   result.Key = '' + bits[3].split('/').splice(1).join('/');
@@ -160,7 +200,7 @@ const get_writestream_s3 = function(params,release,taxid) {
     if (err) {
       throw err;
     }
-    console.log("Uploaded data to S3 for ",taxid);
+    console.log("Uploaded data to S3 for ",filename);
   });
   return stream;
 };
@@ -299,6 +339,7 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
   return uniprot.get_transmembranes(tax_ids)
   .then(write_topology_files.bind(null,tax_ids))
   .then(() => ftp.get_stream(interpro_url))
+  .then((stream) => stream.pipe(new ByteCounter(stream.size)))
   .then(decompress)
   .then(line_filter.bind(null,filter))
   .then(write_taxonomy_files.bind(null,release,tax_ids))
