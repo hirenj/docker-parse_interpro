@@ -132,6 +132,7 @@ const get_transmembranes = function(taxids) {
   return Promise.all(taxids.map(get_transmembrane)).then(function(streams) {
     var combiner = StreamCombiner({objectMode: true});
     streams.forEach(stream => combiner.write(stream));
+    combiner.end();
     return combiner;
   });
 };

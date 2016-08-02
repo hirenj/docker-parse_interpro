@@ -298,16 +298,16 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
 
   return uniprot.get_transmembranes(tax_ids)
   .then(write_topology_files.bind(null,tax_ids))
-  // .then(() => ftp.get_stream(interpro_url))
-  // .then(decompress)
-  // .then(line_filter.bind(null,filter))
-  // .then(write_taxonomy_files.bind(null,release,tax_ids))
-  // .then(() => console.log("Done writing InterPro files"))
-  // .then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
-  // .then(write_class_files.bind(null,release))
-  // .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
-  // .then(write_meta_files.bind(null,release))
-  // .then(() => console.log("Done writing InterPro metadata files"));
+  .then(() => ftp.get_stream(interpro_url))
+  .then(decompress)
+  .then(line_filter.bind(null,filter))
+  .then(write_taxonomy_files.bind(null,release,tax_ids))
+  .then(() => console.log("Done writing InterPro files"))
+  .then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
+  .then(write_class_files.bind(null,release))
+  .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
+  .then(write_meta_files.bind(null,release))
+  .then(() => console.log("Done writing InterPro metadata files"));
 })
 .then(() => console.log("Finished executing"))
 .catch(function(err) {
