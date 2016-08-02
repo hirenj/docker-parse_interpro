@@ -239,23 +239,22 @@ const write_taxonomy_files = function(release,tax_ids,stream) {
 };
 
 const write_topology_files = function(tax_ids,stream) {
-  stream.on('data',dat => console.log(dat.toString()));
-  // tax_ids.forEach(function(taxid) {
-  //   let output = new WriteTaxid(taxid);
-  //   output.on('end',function() {
-  //     console.log("Done writing TSV for ",taxid);
-  //   });
-  //   let out = get_writestream_topology(taxid);
-  //   stream.pipe(output).pipe(out);
-  // });
-  // return new Promise(function(resolve,reject) {
-  //   stream.on('error',function(err) {
-  //     reject(err);
-  //   });
-  //   stream.on('end',function() {
-  //     resolve();
-  //   });
-  // });
+  tax_ids.forEach(function(taxid) {
+    let output = new WriteTaxid(taxid);
+    output.on('end',function() {
+      console.log("Done writing TSV for ",taxid);
+    });
+    let out = get_writestream_topology(taxid);
+    stream.pipe(output).pipe(out);
+  });
+  return new Promise(function(resolve,reject) {
+    stream.on('error',function(err) {
+      reject(err);
+    });
+    stream.on('end',function() {
+      resolve();
+    });
+  });
 };
 
 const write_meta_files = function(release,stream) {

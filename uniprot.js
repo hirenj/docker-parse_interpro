@@ -9,7 +9,7 @@ const StreamCombiner = require('stream-stream');
 const Transform = stream.Transform;
 
 const UNIPROT_IDS_URL = 'http://www.uniprot.org/uniprot/?compress=yes&fil=reference&force=no&format=list&query=organism:';
-const UNIPROT_TRANSMEMBRANE = 'http://www.uniprot.org/uniprot/?compress=yes&query=&format=tab&columns=id,feature(TRANSMEMBRANE),feature(SIGNAL)&fil=organism:';
+const UNIPROT_TRANSMEMBRANE = 'http://www.uniprot.org/uniprot/?compress=yes&sort=id&desc=no&query=&format=tab&columns=id,feature(TRANSMEMBRANE),feature(SIGNAL)&fil=organism:';
 
 function AccessionFilter(wanted, options) {
 
@@ -48,8 +48,20 @@ function MembraneWriter(taxid,options) {
 util.inherits(MembraneWriter, Transform);
 
 MembraneWriter.prototype._transform = function (obj, enc, cb) {
-  obj.transmembrane.forEach(mem => this.push([ obj.acc, 'TMhelix' ].concat(mem).join(',')+"\n"));    
-  obj.signal.forEach(sig => this.push([ obj.acc, 'SIGNAL' ].concat(sig).join(',')+"\n"));
+  obj.transmembrane.forEach(mem => this.push({
+    'acc' : obj.acc,
+    'interpro' : 'TMhelix',
+    'start' : parseInt(mem[0]),
+    'end' : parseInt(mem[1]),
+    'taxid' : this.taxid
+  }));
+  obj.signal.forEach(sig => this.push({
+    'acc' : obj.acc,
+    'interpro' : 'SIGNAL',
+    'start' : parseInt(sig[0]),
+    'end' : parseInt(sig[1]),
+    'taxid' : this.taxid
+  }));
   cb();
 };
 
@@ -118,7 +130,7 @@ const get_wanted_ids = function(taxids) {
 
 const get_transmembranes = function(taxids) {
   return Promise.all(taxids.map(get_transmembrane)).then(function(streams) {
-    var combiner = StreamCombiner();
+    var combiner = StreamCombiner({objectMode: true});
     streams.forEach(stream => combiner.write(stream));
     return combiner;
   });
