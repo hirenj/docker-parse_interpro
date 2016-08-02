@@ -147,6 +147,9 @@ const get_writestream_s3 = function(params,release,taxid) {
   if (taxid == 'class') {
     filename = 'class-InterPro.tsv';
   }
+  if ( ! taxid && release ) {
+    filename = release;
+  }
   const s3 = new AWS.S3({region:params.Region});
   delete params.Region;
   params.Key = (params.Key.length > 0 ? params.Key.replace(/\/$/,'') + '/' : '') + filename;
@@ -196,6 +199,15 @@ const get_writestream_classes = function(release) {
   return fs.createWriteStream(path.join( output_path, 'class-InterPro-'+release+'.tsv' ));
 };
 
+const get_writestream_topology = function(taxid) {
+  if (output_path.match(/^s3:/)) {
+    console.log("Uploading protein membrane info to ",output_path);
+    return get_writestream_s3(parse_path_s3(output_path),'membrane-'+taxid);
+  }
+  console.log("Writing protein membrane info to ",output_path);
+  return fs.createWriteStream(path.join( output_path, 'membrane-'+taxid+'.tsv' ));
+};
+
 const check_release = function(taxids) {
   return get_release().then(function(release) {
     return Promise.all( taxids.map(check_exists.bind(null,release)) ).then(function(exists) {
@@ -214,6 +226,25 @@ const write_taxonomy_files = function(release,tax_ids,stream) {
       console.log("Done writing TSV for ",taxid);
     });
     let out = get_writestream(release,taxid);
+    stream.pipe(output).pipe(out);
+  });
+  return new Promise(function(resolve,reject) {
+    stream.on('error',function(err) {
+      reject(err);
+    });
+    stream.on('end',function() {
+      resolve();
+    });
+  });
+};
+
+const write_topology_files = function(tax_ids,stream) {
+  tax_ids.forEach(function(taxid) {
+    let output = new WriteTaxid(taxid);
+    output.on('end',function() {
+      console.log("Done writing TSV for ",taxid);
+    });
+    let out = get_writestream_topology(taxid);
     stream.pipe(output).pipe(out);
   });
   return new Promise(function(resolve,reject) {
@@ -264,7 +295,10 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
     process.exit(0);
   }
   let filter = meta[1];
-  return ftp.get_stream(interpro_url)
+
+  return uniprot.get_transmembranes(tax_ids)
+  .then(write_topology_files.bind(null,tax_ids))
+  .then(() => ftp.get_stream(interpro_url))
   .then(decompress)
   .then(line_filter.bind(null,filter))
   .then(write_taxonomy_files.bind(null,release,tax_ids))
