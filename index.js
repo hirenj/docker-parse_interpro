@@ -193,9 +193,10 @@ const get_writestream_s3 = function(params,release,taxid) {
   const s3 = new AWS.S3({region:params.Region});
   delete params.Region;
   params.Key = (params.Key.length > 0 ? params.Key.replace(/\/$/,'') + '/' : '') + filename;
+  params.Metadata = { 'interpro' : release };
+  console.log("S3 write params ",params);
   var stream = new require('stream').PassThrough();
   params.Body = stream;
-  params.Metadata = { 'interpro' : release };
   s3.upload(params,{},function(err,dat) {
     if (err) {
       throw err;
