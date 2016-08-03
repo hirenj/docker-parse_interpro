@@ -15,7 +15,8 @@
     "ftp": "^0.3.10",
     "nconf": "^0.8.4",
     "request": "^2.72.0",
-    "stream-stream": "^1.2.6"
+    "stream-stream": "^1.2.6",
+    "temp": "^0.8.3"
   },
   "devDependencies": {}
 }

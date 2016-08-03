@@ -10,6 +10,7 @@ const path = require('path');
 const AWS = require('aws-sdk');
 const util = require('util');
 const Transform = require('stream').Transform;
+const temp = require('temp');
 
 const promisify = function(aws) {
   aws.Request.prototype.promise = function() {
@@ -181,29 +182,60 @@ const check_exists_s3 = function(release,taxid) {
 
 const get_writestream_s3 = function(params,release,taxid) {
   let filename = 'InterPro-'+taxid+'.tsv';
+  let largefile = true;
   if ( taxid === 'meta' ) {
     filename = 'meta-InterPro.tsv';
+    largefile = false;
   }
   if (taxid == 'class') {
     filename = 'class-InterPro.tsv';
+    largefile = false;
   }
   if ( ! taxid && release ) {
     filename = release;
+    largefile = false;
   }
   const s3 = new AWS.S3({region:params.Region});
   delete params.Region;
   params.Key = (params.Key.length > 0 ? params.Key.replace(/\/$/,'') + '/' : '') + filename;
   params.Metadata = { 'interpro' : release };
-  console.log("S3 write params ",params);
-  var stream = new require('stream').PassThrough();
-  params.Body = stream;
-  s3.upload(params,{},function(err,dat) {
-    if (err) {
-      throw err;
-    }
-    console.log("Uploaded data to S3 for ",filename);
+  console.log("S3 write params ",params.Bucket,params.Key);
+
+  var inputstream = new require('stream').PassThrough();
+  let stream_ready = Promise.resolve(inputstream);
+  if (largefile) {
+    temp.track();
+    let altstream = temp.createWriteStream();
+    console.log("Writing data to ",altstream.path," for ",params.Key);
+    stream_ready = new Promise(function(resolve,reject) {
+      altstream.on('close',function() {
+        console.log("Finished writing temp file ",altstream.path,", writing to S3 now at ",params.Key);
+        resolve(fs.createReadStream(altstream.path));
+      });
+      altstream.on('error',reject);
+    });
+    inputstream.promise = stream_ready.then(function(stream) {
+      return new Promise(function(resolve,reject) {
+        stream.on('end',resolve);
+        stream.on('close',resolve);
+        stream.on('error',reject);
+      });
+    });
+    inputstream.pipe(altstream);
+  }
+  stream_ready.then(function(stream) {
+    params.Body = stream;
+    s3.upload(params,{},function(err,dat) {
+      if (err) {
+        throw err;
+      }
+      console.log("Uploaded data to S3 for ",taxid);
+    });
+  }).catch(function(err) {
+    console.log(err);
+    throw err;
   });
-  return stream;
+  return inputstream;
 };
 
 const check_exists = function(release,taxid) {
@@ -215,7 +247,7 @@ const check_exists = function(release,taxid) {
 
 const get_writestream = function(release,taxid) {
   if (output_path.match(/^s3:/)) {
-    console.log("Uploading to ",output_path);
+    console.log("Uploading domain data to ",output_path);
     return get_writestream_s3(parse_path_s3(output_path),release, taxid);
   }
   console.log("Writing to ",output_path);
@@ -261,12 +293,16 @@ const check_release = function(taxids) {
 };
 
 const write_taxonomy_files = function(release,tax_ids,stream) {
+  let ready_promises = [];
   tax_ids.forEach(function(taxid) {
     let output = new WriteTaxid(taxid);
     output.on('end',function() {
       console.log("Done writing TSV for ",taxid);
     });
     let out = get_writestream(release,taxid);
+    if (out.promise) {
+      ready_promises.push(out.promise);
+    }
     stream.pipe(output).pipe(out);
   });
   return new Promise(function(resolve,reject) {
@@ -276,6 +312,8 @@ const write_taxonomy_files = function(release,tax_ids,stream) {
     stream.on('end',function() {
       resolve();
     });
+  }).then(function() {
+    return Promise.all(ready_promises);
   });
 };
 
@@ -336,6 +374,13 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
     process.exit(0);
   }
   let filter = meta[1];
+
+  // .then(function() {
+  //   let instream = fs.createReadStream('/tmp/interpro_sample.gz');
+  //   instream.size = 43102686;
+  //   return instream;
+  // })
+
 
   return uniprot.get_transmembranes(tax_ids)
   .then(write_topology_files.bind(null,tax_ids))
