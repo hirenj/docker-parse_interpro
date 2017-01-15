@@ -5,9 +5,11 @@ const util = require('util');
 const request = require('request');
 const zlib = require('zlib');
 const StreamCombiner = require('stream-stream');
+const nconf = require('nconf');
 
 const Transform = stream.Transform;
 
+const UNIPROT_IDS_TEST_URL = 'http://www.uniprot.org/uniprot/?compress=yes&force=no&format=list&query=organism:';
 const UNIPROT_IDS_URL = 'http://www.uniprot.org/uniprot/?compress=yes&fil=reference&force=no&format=list&query=organism:';
 const UNIPROT_TRANSMEMBRANE = 'http://www.uniprot.org/uniprot/?compress=yes&sort=id&desc=no&query=&format=tab&columns=id,feature(TRANSMEMBRANE),feature(SIGNAL)&fil=organism:';
 
@@ -99,7 +101,12 @@ const line_filter = function(filter,stream) {
 
 const get_ids = function(taxid) {
   var gunzip = zlib.createGunzip();
-  request({url: UNIPROT_IDS_URL+taxid }).pipe(gunzip);
+  let uniprot_base_url = UNIPROT_IDS_URL;
+  if (nconf.get('test')) {
+    uniprot_base_url = UNIPROT_IDS_TEST_URL;
+    console.log("Using Test url for UniProt",uniprot_base_url+taxid);
+  }
+  request({url: uniprot_base_url+taxid+"&cachebuster="+(new Date().getTime()) }).pipe(gunzip);
   return new Promise(function(resolve) {
     var data = '';
     gunzip.on('data',function(dat) {

@@ -49,6 +49,8 @@ const LATEST_RELEASE  = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/rele
 const LATEST_INTERPRO_NAMES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/short_names.dat';
 const LATEST_INTERPRO_CLASSES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/entry.list';
 
+const test_taxonomy_ids = ['35758','1310605','1310609','1310618'];
+
 
 const decompress = function(stream) {
   var gunzip = zlib.createGunzip();
@@ -282,6 +284,9 @@ const get_writestream_topology = function(taxid) {
 };
 
 const check_release = function(taxids) {
+  if (nconf.get('test')) {
+    return Promise.resolve('test');
+  }
   return get_release().then(function(release) {
     return Promise.all( taxids.map(check_exists.bind(null,release)) ).then(function(exists) {
       if (exists.reduce(function(curr,next) { return curr && next; },true)) {
@@ -360,7 +365,21 @@ const write_class_files = function(release,stream) {
   });
 };
 
-console.log("Getting InterPro entries for taxonomies",nconf.get('taxid'));
+const stream_aborter = function(input_stream,output_stream) {
+  let counter = 0;
+  output_stream.on('data', () => {
+    counter++;
+    if (counter == 2000) {
+      input_stream.destroy();
+    }
+  });
+};
+
+if (nconf.get('test')) {
+  tax_ids = test_taxonomy_ids;
+}
+
+console.log("Getting InterPro entries for taxonomies",tax_ids.join(','));
 
 if (tax_ids.length < 1) {
   process.exit(1);
@@ -381,14 +400,32 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
   //   return instream;
   // })
 
+  let abort_stream;
 
-  return uniprot.get_transmembranes(tax_ids)
-  .then(write_topology_files.bind(null,tax_ids))
+  let membrane_download = Promise.resolve();
+
+  if ( nconf.get('test') ) {
+    console.log("Skipping download of TM data");
+  } else {
+    membrane_download = uniprot.get_transmembranes(tax_ids)
+                        .then(write_topology_files.bind(null,tax_ids));
+  }
+
+  let interpro_lines = membrane_download
   .then(() => ftp.get_stream(interpro_url))
-  .then((stream) => stream.pipe(new ByteCounter(stream.size)))
+  .then((stream) => {
+    abort_stream = stream_aborter.bind(null,stream);
+    return stream.pipe(new ByteCounter(stream.size));
+  })
   .then(decompress)
-  .then(line_filter.bind(null,filter))
-  .then(write_taxonomy_files.bind(null,release,tax_ids))
+  .then(line_filter.bind(null,filter));
+
+  if (nconf.get('test')) {
+    console.log("Waiting to abort stream early");
+    interpro_lines.then( (stream) => abort_stream(stream) );
+  }
+
+  return interpro_lines.then(write_taxonomy_files.bind(null,release,tax_ids))
   .then(() => console.log("Done writing InterPro files"))
   .then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
   .then(write_class_files.bind(null,release))
