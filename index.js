@@ -44,12 +44,20 @@ promisify(AWS);
 
 nconf.env().argv();
 
-const LATEST_INTERPRO = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/protein2ipr.dat.gz';
-const LATEST_RELEASE  = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/release_notes.txt';
-const LATEST_INTERPRO_NAMES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/short_names.dat';
-const LATEST_INTERPRO_CLASSES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/current/entry.list';
+const check_release_format = function(selector) {
+  return selector.match(/^current$|^\d+\.\d+$/);
+};
 
-const test_taxonomy_ids = ['35758','1310605','1310609','1310618'];
+
+const release_selector = check_release_format(nconf.get('release') || 'current');
+
+
+const LATEST_INTERPRO = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/protein2ipr.dat.gz';
+const LATEST_RELEASE  = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/release_notes.txt';
+const LATEST_INTERPRO_NAMES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/short_names.dat';
+const LATEST_INTERPRO_CLASSES = 'ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/entry.list';
+
+const test_taxonomy_ids = ['35758','1310605'];
 
 
 const decompress = function(stream) {
@@ -370,6 +378,7 @@ const stream_aborter = function(input_stream,output_stream) {
   output_stream.on('data', () => {
     counter++;
     if (counter == 2000) {
+      output_stream.end();
       input_stream.destroy();
     }
   });
@@ -404,12 +413,8 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
 
   let membrane_download = Promise.resolve();
 
-  if ( nconf.get('test') ) {
-    console.log("Skipping download of TM data");
-  } else {
-    membrane_download = uniprot.get_transmembranes(tax_ids)
-                        .then(write_topology_files.bind(null,tax_ids));
-  }
+  membrane_download = uniprot.get_transmembranes(tax_ids)
+                      .then(write_topology_files.bind(null,tax_ids));
 
   let interpro_lines = membrane_download
   .then(() => ftp.get_stream(interpro_url))
@@ -426,6 +431,12 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
   }
 
   return interpro_lines.then(write_taxonomy_files.bind(null,release,tax_ids))
+  .catch(err => {
+    if (err.message == 'write after end') {
+      return;
+    }
+    throw err;
+  })
   .then(() => console.log("Done writing InterPro files"))
   .then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
   .then(write_class_files.bind(null,release))

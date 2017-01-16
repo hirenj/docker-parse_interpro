@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Extract InterPro ids from InterPro data files for specific Taxonomy IDs",
   "main": "index.js",
+  "bin" : {
+    "parse_interpro" : "index.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
