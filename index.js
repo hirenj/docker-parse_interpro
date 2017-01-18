@@ -61,6 +61,9 @@ const test_taxonomy_ids = ['35758','1310605'];
 
 
 const decompress = function(stream) {
+  if (stream.skip_decompress) {
+    return stream;
+  }
   var gunzip = zlib.createGunzip();
   stream.pipe(gunzip);
   return gunzip;
@@ -433,20 +436,20 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
     console.log("Using locally downloaded interpro at "+nconf.get('interpro-data'));
     interpro_lines = membrane_download
     .then( () => read_file(nconf.get('interpro-data')));
-    if (nconf.get('interpro-data').indexOf('gz') >= 0) {
-      interpro_lines = interpro_lines.then(decompress);
+    if (nconf.get('interpro-data').indexOf('gz') < 0) {
+      interpro_lines.skip_decompress = true;
     }
   } else {
     console.log("Downloading InterPro via ftp");
     interpro_lines = membrane_download
-    .then(() => ftp.get_stream(interpro_url))
-    .then(decompress)
+    .then(() => ftp.get_stream(interpro_url));
   }
 
   interpro_lines = interpro_lines.then((stream) => {
     abort_stream = stream_aborter.bind(null,stream);
     return stream.pipe(new ByteCounter(stream.size));
   })
+  .then(decompress)
   .then(line_filter.bind(null,filter));
 
   if (nconf.get('test')) {
