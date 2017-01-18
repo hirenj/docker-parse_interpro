@@ -426,10 +426,18 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
 
   let abort_stream;
 
+  let metadata_download = Promise.resolve().then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
+  .then(write_class_files.bind(null,release))
+  .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
+  .then(write_meta_files.bind(null,release))
+  .then(() => console.log("Done writing InterPro metadata files"));
+
   let membrane_download = Promise.resolve();
 
-  // membrane_download = uniprot.get_transmembranes(tax_ids)
-  //                     .then(write_topology_files.bind(null,tax_ids));
+  membrane_download = uniprot.get_transmembranes(tax_ids)
+                      .then(write_topology_files.bind(null,tax_ids))
+                      .then( () => metadata_download );
+
 
   let interpro_lines;
   if (nconf.get('interpro-data')) {
@@ -465,12 +473,7 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
     }
     throw err;
   })
-  .then(() => console.log("Done writing InterPro files"))
-  .then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
-  .then(write_class_files.bind(null,release))
-  .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
-  .then(write_meta_files.bind(null,release))
-  .then(() => console.log("Done writing InterPro metadata files"));
+  .then(() => console.log("Done writing InterPro files"));
 })
 .then(() => console.log("Finished executing"))
 .catch(function(err) {
