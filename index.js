@@ -292,9 +292,6 @@ const get_writestream_topology = function(taxid) {
 };
 
 const check_release = function(taxids) {
-  if (nconf.get('test')) {
-    return Promise.resolve('test');
-  }
   return get_release().then(function(release) {
     return Promise.all( taxids.map(check_exists.bind(null,release)) ).then(function(exists) {
       if (exists.reduce(function(curr,next) { return curr && next; },true)) {
