@@ -331,7 +331,7 @@ const write_topology_files = function(tax_ids,stream) {
   tax_ids.forEach(function(taxid) {
     let output = new WriteTaxid(taxid);
     output.on('end',function() {
-      console.log("Done writing TSV for ",taxid);
+      console.log("Done writing topology TSV for ",taxid);
     });
     let out = get_writestream_topology(taxid);
     stream.pipe(output).pipe(out);
@@ -430,6 +430,7 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
   return interpro_lines.then(write_taxonomy_files.bind(null,release,tax_ids))
   .catch(err => {
     if (err.message == 'write after end') {
+      console.log(err.message);
       return;
     }
     throw err;
