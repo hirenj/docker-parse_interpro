@@ -381,6 +381,21 @@ const stream_aborter = function(input_stream,output_stream) {
   });
 };
 
+const read_file = function(filename) {
+  return new Promise(function(resolve,reject) {
+    fs.stat(filename, function(error, stat) {
+      if (error) {
+        reject(error);
+        return;
+      }
+      let size = stat.size;
+      let stream = fs.createReadStream(filename);
+      stream.size = size;
+      resolve(stream);
+    });
+  });
+};
+
 if (nconf.get('test')) {
   tax_ids = test_taxonomy_ids;
 }
@@ -410,16 +425,28 @@ Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(fun
 
   let membrane_download = Promise.resolve();
 
-  membrane_download = uniprot.get_transmembranes(tax_ids)
-                      .then(write_topology_files.bind(null,tax_ids));
+  // membrane_download = uniprot.get_transmembranes(tax_ids)
+  //                     .then(write_topology_files.bind(null,tax_ids));
 
-  let interpro_lines = membrane_download
-  .then(() => ftp.get_stream(interpro_url))
-  .then((stream) => {
+  let interpro_lines;
+  if (nconf.get('interpro-data')) {
+    console.log("Using locally downloaded interpro at "+nconf.get('interpro-data'));
+    interpro_lines = membrane_download
+    .then( () => read_file(nconf.get('interpro-data')));
+    if (nconf.get('interpro-data').indexOf('gz') >= 0) {
+      interpro_lines = interpro_lines.then(decompress);
+    }
+  } else {
+    console.log("Downloading InterPro via ftp");
+    interpro_lines = membrane_download
+    .then(() => ftp.get_stream(interpro_url))
+    .then(decompress)
+  }
+
+  interpro_lines = interpro_lines.then((stream) => {
     abort_stream = stream_aborter.bind(null,stream);
     return stream.pipe(new ByteCounter(stream.size));
   })
-  .then(decompress)
   .then(line_filter.bind(null,filter));
 
   if (nconf.get('test')) {
