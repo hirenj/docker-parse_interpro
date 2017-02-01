@@ -11,6 +11,8 @@ const AWS = require('aws-sdk');
 const util = require('util');
 const Transform = require('stream').Transform;
 const temp = require('temp');
+const events = require('events');
+events.EventEmitter.defaultMaxListeners = 100;
 
 const promisify = function(aws) {
   aws.Request.prototype.promise = function() {
