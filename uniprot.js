@@ -9,9 +9,9 @@ const nconf = require('nconf');
 
 const Transform = stream.Transform;
 
-const UNIPROT_IDS_TEST_URL = 'http://www.uniprot.org/uniprot/?compress=yes&force=no&format=list&query=organism:';
-const UNIPROT_IDS_URL = 'http://www.uniprot.org/uniprot/?compress=yes&fil=reference&force=no&format=list&query=organism:';
-const UNIPROT_TRANSMEMBRANE = 'http://www.uniprot.org/uniprot/?compress=yes&sort=id&desc=no&query=&format=tab&columns=id,feature(TRANSMEMBRANE),feature(SIGNAL)&fil=organism:';
+const UNIPROT_IDS_TEST_URL = 'https://www.uniprot.org/uniprot/?compress=yes&force=no&format=list&query=organism:';
+const UNIPROT_IDS_URL = 'https://www.uniprot.org/uniprot/?compress=yes&fil=reference&force=no&format=list&query=organism:';
+const UNIPROT_TRANSMEMBRANE = 'https://www.uniprot.org/uniprot/?compress=yes&sort=id&desc=no&query=&format=tab&columns=id,feature(TRANSMEMBRANE),feature(SIGNAL)&fil=organism:';
 
 function AccessionFilter(wanted, options) {
 
@@ -69,7 +69,7 @@ MembraneWriter.prototype._transform = function (obj, enc, cb) {
 
 const site_extractor = function(feature) {
   let matched = null;
-  if (matched = feature.match(/(SIGNAL|TRANSMEM)\s+(\d+)\s+(\d+)/)) {
+  if (matched = feature.match(/(SIGNAL|TRANSMEM)\s+(\d+)..(\d+)/)) {
     return [ matched[2], matched[3] ];
   }
 };
