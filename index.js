@@ -412,73 +412,86 @@ if (tax_ids.length < 1) {
 }
 
 let interpro_url = LATEST_INTERPRO;
-Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(function(meta) {
-  let release = meta[0];
-  if ( ! release ) {
-    console.log("We already have data for this Release. Stopping.");
-    process.exit(0);
-  }
-  let filter = meta[1];
 
-  // .then(function() {
-  //   let instream = fs.createReadStream('/tmp/interpro_sample.gz');
-  //   instream.size = 43102686;
-  //   return instream;
-  // })
+if (nconf.get('uniprot-only')) {
+  console.log('Getting UniProt data only');
+  uniprot.get_transmembranes(tax_ids)
+         .then(write_topology_files.bind(null,tax_ids))
+         .then( () => {
+          process.exit(0);
+         });
 
-  let abort_stream;
+} else {
+  console.log('Retrieving all data');
 
-  let metadata_download = Promise.resolve().then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
-  .then(write_class_files.bind(null,release))
-  .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
-  .then(write_meta_files.bind(null,release))
-  .then(() => console.log("Done writing InterPro metadata files"));
-
-  let membrane_download = Promise.resolve();
-
-  membrane_download = uniprot.get_transmembranes(tax_ids)
-                      .then(write_topology_files.bind(null,tax_ids))
-                      .then( () => metadata_download );
-
-
-  let interpro_lines;
-  if (nconf.get('interpro-data')) {
-    console.log("Using locally downloaded interpro at "+nconf.get('interpro-data'));
-    interpro_lines = membrane_download
-    .then( () => read_file(nconf.get('interpro-data')));
-    if (nconf.get('interpro-data').indexOf('gz') < 0) {
-      interpro_lines.skip_decompress = true;
+  Promise.all([ check_release(tax_ids), uniprot.create_filter(tax_ids) ]).then(function(meta) {
+    let release = meta[0];
+    if ( ! release ) {
+      console.log("We already have data for this Release. Stopping.");
+      process.exit(0);
     }
-  } else {
-    console.log("Downloading InterPro via ftp");
-    interpro_lines = membrane_download
-    .then(() => ftp.get_stream(interpro_url));
-  }
+    let filter = meta[1];
 
-  interpro_lines = interpro_lines.then((stream) => {
-    abort_stream = stream_aborter.bind(null,stream);
-    return stream.pipe(new ByteCounter(stream.size));
-  })
-  .then(decompress)
-  .then(line_filter.bind(null,filter));
+    // .then(function() {
+    //   let instream = fs.createReadStream('/tmp/interpro_sample.gz');
+    //   instream.size = 43102686;
+    //   return instream;
+    // })
 
-  if (nconf.get('test')) {
-    console.log("Waiting to abort stream early");
-    interpro_lines.then( (stream) => abort_stream(stream) );
-  }
+    let abort_stream;
 
-  return interpro_lines.then(write_taxonomy_files.bind(null,release,tax_ids))
-  .catch(err => {
-    if (err.message == 'write after end') {
-      console.log(err.message);
-      return;
+    let metadata_download = Promise.resolve().then(() => ftp.get_stream(LATEST_INTERPRO_CLASSES))
+    .then(write_class_files.bind(null,release))
+    .then(() => ftp.get_stream(LATEST_INTERPRO_NAMES))
+    .then(write_meta_files.bind(null,release))
+    .then(() => console.log("Done writing InterPro metadata files"));
+
+    let membrane_download = Promise.resolve();
+
+    membrane_download = uniprot.get_transmembranes(tax_ids)
+                        .then(write_topology_files.bind(null,tax_ids))
+                        .then( () => metadata_download );
+
+
+    let interpro_lines;
+    if (nconf.get('interpro-data')) {
+      console.log("Using locally downloaded interpro at "+nconf.get('interpro-data'));
+      interpro_lines = membrane_download
+      .then( () => read_file(nconf.get('interpro-data')));
+      if (nconf.get('interpro-data').indexOf('gz') < 0) {
+        interpro_lines.skip_decompress = true;
+      }
+    } else {
+      console.log("Downloading InterPro via ftp");
+      interpro_lines = membrane_download
+      .then(() => ftp.get_stream(interpro_url));
     }
-    throw err;
+
+    interpro_lines = interpro_lines.then((stream) => {
+      abort_stream = stream_aborter.bind(null,stream);
+      return stream.pipe(new ByteCounter(stream.size));
+    })
+    .then(decompress)
+    .then(line_filter.bind(null,filter));
+
+    if (nconf.get('test')) {
+      console.log("Waiting to abort stream early");
+      interpro_lines.then( (stream) => abort_stream(stream) );
+    }
+
+    return interpro_lines.then(write_taxonomy_files.bind(null,release,tax_ids))
+    .catch(err => {
+      if (err.message == 'write after end') {
+        console.log(err.message);
+        return;
+      }
+      throw err;
+    })
+    .then(() => console.log("Done writing InterPro files"));
   })
-  .then(() => console.log("Done writing InterPro files"));
-})
-.then(() => console.log("Finished executing"))
-.catch(function(err) {
-  console.log(err,err.stack);
-  process.exit(1);
-});
+  .then(() => console.log("Finished executing"))
+  .catch(function(err) {
+    console.log(err,err.stack);
+    process.exit(1);
+  });
+}
