@@ -9,9 +9,9 @@ const nconf = require('nconf');
 
 const Transform = stream.Transform;
 
-const UNIPROT_IDS_TEST_URL = 'https://www.uniprot.org/uniprot/?compress=yes&force=no&format=list&query=organism:';
-const UNIPROT_IDS_URL = 'https://www.uniprot.org/uniprot/?compress=yes&fil=reference&force=no&format=list&query=organism:';
-const UNIPROT_TRANSMEMBRANE = 'https://www.uniprot.org/uniprot/?compress=yes&sort=id&desc=no&query=&format=tab&columns=id,feature(TRANSMEMBRANE),feature(SIGNAL)&fil=organism:';
+const UNIPROT_IDS_TEST_URL = 'https://rest.uniprot.org/uniprotkb/stream?compressed=true&format=list&query=organism_id:';
+const UNIPROT_IDS_URL = 'https://rest.uniprot.org/uniprotkb/stream?compressed=true&format=list&query=organism_id:';
+const UNIPROT_TRANSMEMBRANE = 'https://rest.uniprot.org/uniprotkb/stream?compressed=true&fields=accession%2Cft_transmem%2Cft_signal&format=tsv&query=organism_id:';
 
 function AccessionFilter(wanted, options) {
 
