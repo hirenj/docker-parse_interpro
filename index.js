@@ -54,10 +54,10 @@ const check_release_format = function(selector) {
 const release_selector = check_release_format(nconf.get('release') || 'current');
 
 
-const LATEST_INTERPRO = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/protein2ipr.dat.gz`;
-const LATEST_RELEASE  = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/release_notes.txt`;
-const LATEST_INTERPRO_NAMES = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/short_names.dat`;
-const LATEST_INTERPRO_CLASSES = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/${release_selector}/entry.list`;
+const LATEST_INTERPRO = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/releases/${release_selector}/protein2ipr.dat.gz`;
+const LATEST_RELEASE  = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/releases/${release_selector}/release_notes.txt`;
+const LATEST_INTERPRO_NAMES = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/releases/${release_selector}/short_names.dat`;
+const LATEST_INTERPRO_CLASSES = `ftp://ftp.ebi.ac.uk/pub/databases/interpro/releases/${release_selector}/entry.list`;
 
 const test_taxonomy_ids = ['35758','1310605'];
 
